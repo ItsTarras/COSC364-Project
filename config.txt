@@ -1,0 +1,15 @@
+# This is a comment
+# Correct Line layout:
+# <parameter-name><single-whitespace><parameter-values-separated-by-commas>
+
+
+
+router-id 1
+input-ports 61110
+
+
+
+
+outputs 6110-1-1,5001-2-4
+
+# This is the end of the config file!
