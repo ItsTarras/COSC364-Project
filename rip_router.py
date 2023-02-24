@@ -28,7 +28,7 @@ class router:
         pass
 
 def main():
-    filename = 'config_alpha.txt'
+    filename = 'config.txt'
     try:
         router_id, input_ports, outputs = check_config(parse_config(filename))      
     except Exception as e:
