@@ -10,6 +10,7 @@ Max Croucher - 23/2/23
 
 COMMENT_CHAR = "#"
 RIP_VERSION = 2
+BUF_SIZE = 1024
 
 """
 RIP Packet Format:
