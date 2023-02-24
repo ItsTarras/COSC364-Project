@@ -1,4 +1,5 @@
 import socket
+import select
 import sys
 from math import inf
 from packets import *
@@ -10,7 +11,7 @@ class Router:
     def __init__(self, router_id, input_ports, outputs):
         forwarding_table = dict()
         for ports in outputs:
-            forwarding_table[ports[1]] = ((ports[0], ports[2]))
+            forwarding_table[ports.router_id] = ((ports.port, ports.metric))
        
         self.router_id = router_id
         self.input_ports = input_ports
@@ -52,13 +53,13 @@ class Router:
     def run(self):
         """ Server Loop"""
         while True:
-            in_packets, _out_packets, _exceptions = select.select(servers, [], servers)
+            in_packets, _out_packets, _exceptions = select.select(self.sockets, [], self.sockets)
             for server in in_packets:
                 for s in self.sockets:
                     if server is s: # Received packet
                         data, client_addr = server.recvfrom(BUF_SIZE)
                         # Check if data is a valid packet and do stuff
-    
+
 def main():
     filename = 'config.txt'
     try:
