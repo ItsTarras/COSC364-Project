@@ -38,10 +38,18 @@ class Router:
         for server in self.sockets:
             server.close()
     
-    def route(self, input_port, output_port):
+    def route(self, packet, destination):
         """Reads from the forwarding table, and routes the message to the output port"""
-        pass
-    
+        
+        #We need to update the hop count first, but I've no idea which part
+        #Of the bytearray stores that.
+        try:
+            port.sendto(packet, (destination[0], destination[1]))
+            print('Sent packet to: ', client_addr[0], '\n')
+        except:
+            print("Error in sending request to client")
+            
+        
     def ping(self, input_ports, outputs):
         """Use a timer to ping all ports periodically"""
         pass
@@ -59,6 +67,25 @@ class Router:
                     if server is s: # Received packet
                         data, client_addr = server.recvfrom(BUF_SIZE)
                         # Check if data is a valid packet and do stuff
+                        
+                        #Checks what port we are receiving from, might need later.
+                        received_from_port = s.getsockname()[1]
+                        
+                        #Checks the packet's hop count
+                        decoded = decode_entry(data)
+                        hop_count = decoded[2]
+                        
+                        #WE NEED TO CHECK THE FORWARDING TABLE FOR THE OUTPUT ADDRESS OF THE PORT!
+                        if hop_count < 15:
+                            #increase hop count
+                            decoded[2] += 1
+                            
+                            #Re-encode the message into the packet.
+                            
+                            #Send the message to the output from the forwarding table
+                            route(data, "INSERT OUTPUT ADDR tuple HERE")
+                    else:
+                        print("Server and Sockets not similar!")
 
 def main():
     filename = 'config.txt'
