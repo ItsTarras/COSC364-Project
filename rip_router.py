@@ -45,7 +45,7 @@ class Router:
         #Of the bytearray stores that.
         try:
             port.sendto(packet, (destination[0], destination[1]))
-            print('Sent packet to: ', client_addr[0], '\n')
+            print('Sent packet to: ', destination[0], '\n')
         except:
             print("Error in sending request to client")
             
@@ -80,7 +80,8 @@ class Router:
                             #increase hop count
                             decoded[2] += 1
                             
-                            #Re-encode the message into the packet.
+                            #Re-encode the message into the packet -NEEDS WORK-.
+                            
                             
                             #Send the message to the output from the forwarding table
                             route(data, "INSERT OUTPUT ADDR tuple HERE")
