@@ -9,18 +9,17 @@ from random import randint
 class Router:
     
     def __init__(self, router_id, input_ports, outputs):
-        forwarding_table = dict()
-        for ports in outputs:
-            forwarding_table[ports.router_id] = ((ports.port, ports.metric))
+        self.forwarding_table = dict()
+        for i in outputs:
+            self.forwarding_table[i.router_id] = i
        
         self.router_id = router_id
         self.input_ports = input_ports
-        self.forwarding_table = forwarding_table
         self.outputs = outputs
         self.sockets = []
     
     def __str__(self):
-        return(f"router-id = {self.router_id} \ninput-ports = {self.input_ports} \noutput-ports = {self.forwarding_table}")
+        return(f"router-id = {self.router_id} \ninput-ports = {self.input_ports} \noutput-ports = {self.outputs} \ntable = {self.forwarding_table}")
     
     def open(self):
         """ Open sockets at each input_port"""
@@ -37,6 +36,34 @@ class Router:
         """ Close all sockets"""
         for server in self.sockets:
             server.close()
+    
+    def send_table(self, destination_id):
+        """ send contents of the routing table to another router with poisoned reverse"""
+        if destination_id not in self.forwarding_table.keys():
+            raise Exception("Unknown router ID")
+        table_entries = []
+        for key in self.forwarding_table.keys():
+            data = self.forwarding_table[key]
+            if data.id == self.id:
+                metric = 16
+            else:
+                metric = data.metric
+            table_entries.append(generate_entry(2, key, metric))
+        packet = generate_packet(2, 2, self.id, table_entries)
+        
+        try:
+            address, port = socket.getaddrinfo("127.0.0.1", self.forwarding_table[destination_id].port)[0][4] # verify ip and port
+        except:
+            raise Exception("Invalid port.")
+        # Send Packet
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # Initialise UDP socket
+        sock.settimeout(1)
+        try:
+            sock.connect((address, port)) # attempt to connect to server
+            sock.sendall(packet) # send packet
+        except ConnectionRefusedError:
+            raise Exception('Unable to connect to server - connection refused.')        
+        sock.close()        
     
     def route(self, packet, destination):
         """Reads from the forwarding table, and routes the message to the output port"""
@@ -101,6 +128,7 @@ def main():
             print("Keyboard Interrupt: Stopping Server")
     except Exception as e:
         print(f"Error: {e}")
+        router.close()
         exit() 
 
 if __name__ == "__main__":
