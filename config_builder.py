@@ -12,6 +12,8 @@ PORT_UPPER = 64000
 ID_LOWER = 1
 ID_UPPER = NUM_ROUTERS * 3
 CONFIG_LOCATION = "generated_config"
+DEFAULT_DELAY = 30
+DELAY_DELTA = 5
 
 def generate_adjacency_list(nodes):
     adj_list = {i: {j: (None, None) for j in nodes} for i in nodes}
@@ -108,6 +110,9 @@ def main():
                     output_ports.append(f"{port}-{metric}-{neighbour_id}")
             config_file.write(f"\n\ninput-ports {','.join(input_ports)}")
             config_file.write(f"\n\noutputs {','.join(output_ports)}")
+            config_file.write("\n\n# Timeout params:")
+            config_file.write(f"\ntimeout-default {DEFAULT_DELAY}")
+            config_file.write(f"\ntimeout-delta {DELAY_DELTA}")
     
 if __name__ == "__main__":
     main()

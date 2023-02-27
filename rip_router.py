@@ -3,12 +3,12 @@ import select
 import sys
 from math import inf
 from packets import *
-from random import randint
+import random
 
 
 class Router:
     
-    def __init__(self, router_id, input_ports, outputs):
+    def __init__(self, router_id, input_ports, outputs, timeout_default, timeout_delta):
         self.forwarding_table = dict()
         for i in outputs:
             self.forwarding_table[i.router_id] = i
@@ -16,10 +16,17 @@ class Router:
         self.router_id = router_id
         self.input_ports = input_ports
         self.outputs = outputs
+        self.timeout_default = timeout_default
+        self.timeout_delta = timeout_delta
+        
         self.sockets = []
     
     def __str__(self):
-        return(f"router-id = {self.router_id} \ninput-ports = {self.input_ports} \noutput-ports = {self.outputs} \ntable = {self.forwarding_table}")
+        return(f"router-id = {self.router_id} \ninput-ports = {self.input_ports} \noutput-ports = {self.outputs} \ntimeout_default= {self.timeout_default} \ntimeout_delta = {self.timeout_delta} \ntable = {self.forwarding_table}")
+    
+    def random_timeout(self):
+        """ Generate a uniformly distributed random timeout value"""
+        return self.timeout_default + random.randint(-self.timeout_delta, self.timeout_delta)
     
     def open(self):
         """ Open sockets at each input_port"""
@@ -116,9 +123,13 @@ class Router:
                         print("Server and Sockets not similar!")
 
 def main():
-    filename = 'config.txt'
     try:
+        filename = 'config_1.txt'
         router = Router(*check_config(parse_config(filename)))
+    except Exception as e:
+        print(f"Error: {e}")
+        exit()
+    try:
         print(router)
         router.open()
         try:

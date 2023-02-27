@@ -127,8 +127,9 @@ def parse_config(filename):
 
 def check_config(config):
     """ Take parameters taken from a config file and check for correctness """
-    if not ('router-id' in config.keys() and 'input-ports' in config.keys() and 'outputs' in config.keys()):
-        raise Exception(f"{filename} is missing required parameters.")
+    parameters = ['router-id', 'input-ports', 'outputs', 'timeout-default', 'timeout-delta']
+    if not all (i in config.keys() for i in parameters):
+        raise Exception(f"config file is missing required parameters.")
     
     # Ensure only one value for 'router-id' is present and that it is an integer
     if len(config["router-id"]) > 1:
@@ -167,5 +168,14 @@ def check_config(config):
         if 0 > router_id or 65536 < router_id:
             raise Exception("the router-id field for an 'outputs' value must be between 0 and 65536")
         outputs.append(RoutingEntry(router_id, port, metric))
-    
-    return router_id, input_ports, outputs
+    if len(config["timeout-default"]) > 1 or len(config["timeout-delta"]) > 1:
+        raise Exception("A timeout parameter must be a single number")
+    try:
+        timeout_default = float(config["timeout-default"][0])
+        timeout_delta = float(config["timeout-delta"][0])
+    except ValueError:
+        raise Exception("timeout parameters must be a number")
+    if timeout_delta > timeout_default:
+        raise Exception("timeout-delta must be less than timeout-default")
+        
+    return router_id, input_ports, outputs, timeout_default, timeout_delta
