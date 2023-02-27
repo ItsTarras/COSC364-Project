@@ -95,32 +95,35 @@ class Router:
     def run(self):
         """ Server Loop"""
         while True:
-            in_packets, _out_packets, _exceptions = select.select(self.sockets, [], self.sockets)
-            for server in in_packets:
-                for s in self.sockets:
-                    if server is s: # Received packet
-                        data, client_addr = server.recvfrom(BUF_SIZE)
-                        # Check if data is a valid packet and do stuff
-                        
-                        #Checks what port we are receiving from, might need later.
-                        received_from_port = s.getsockname()[1]
-                        
-                        #Checks the packet's hop count
-                        decoded = decode_entry(data)
-                        hop_count = decoded[2]
-                        
-                        #WE NEED TO CHECK THE FORWARDING TABLE FOR THE OUTPUT ADDRESS OF THE PORT!
-                        if hop_count < 15:
-                            #increase hop count
-                            decoded[2] += 1
+            in_packets, _out_packets, _exceptions = select.select(self.sockets, [], self.sockets, self.random_timeout())
+            if in_packets == []: # Timeout
+                pass
+            else:
+                for server in in_packets:
+                    for s in self.sockets:
+                        if server is s: # Received packet
+                            data, client_addr = server.recvfrom(BUF_SIZE)
+                            # Check if data is a valid packet and do stuff
                             
-                            #Re-encode the message into the packet -NEEDS WORK-.
+                            #Checks what port we are receiving from, might need later.
+                            received_from_port = s.getsockname()[1]
                             
+                            #Checks the packet's hop count
+                            decoded = decode_entry(data)
+                            hop_count = decoded[2]
                             
-                            #Send the message to the output from the forwarding table
-                            route(data, "INSERT OUTPUT ADDR tuple HERE")
-                    else:
-                        print("Server and Sockets not similar!")
+                            #WE NEED TO CHECK THE FORWARDING TABLE FOR THE OUTPUT ADDRESS OF THE PORT!
+                            if hop_count < 15:
+                                #increase hop count
+                                decoded[2] += 1
+                                
+                                #Re-encode the message into the packet -NEEDS WORK-.
+                                
+                                
+                                #Send the message to the output from the forwarding table
+                                route(data, "INSERT OUTPUT ADDR tuple HERE")
+                        else:
+                            print("Server and Sockets not similar!")
 
 def main():
     try:
