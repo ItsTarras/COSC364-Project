@@ -75,8 +75,6 @@ class Router:
     def route(self, packet, destination):
         """Reads from the forwarding table, and routes the message to the output port"""
         
-        #We need to update the hop count first, but I've no idea which part
-        #Of the bytearray stores that.
         try:
             port.sendto(packet, (destination[0], destination[1]))
             print('Sent packet to: ', destination[0], '\n')
@@ -92,6 +90,36 @@ class Router:
         """ Compare incoming packet to existing forwarding tables"""
         pass
     
+    
+    def update_forwarding_table(self, data):
+        #We need to check if the route was updated, and if so, send out a response.
+        updated = False
+        
+        #Breaking down and decoding the packet - Tarras Weir 10/03/2023
+        command, version, sender_id, entries = decode_packet(data)
+        destination_id, metric = entries[1], entries[2]
+        
+        #Checking if the destination ID is already within the forwarding table:
+        if destination_id in self.forwarding_table.keys():
+            #Now, check if the sender is the next hop for the destination.
+            if self.forwarding_table[destination_id][0] == sender_id:
+                #Compare the existing metrics
+                if metric + self.forwarding_table[sender_id][1] < \
+                   self.forwarding_table[destination_id][1]:
+                    self.forwarding_table[destination_id] = (sender_id, metric +\
+                                                             self.forwarding_table[sender_id][1])
+                    updated = True
+        
+        else:
+            #If it doesn't exist, put destination_id into the forwarding table.
+            self.forwarding_table[destination_id] = (sender_id, metric + self.forwarding_table[sender_id][1])
+            updated = True
+        
+        #Print a debug messgae if there was a successful update.
+        if updated is True:
+            print(f"Forwarding table was updated by {sender_id}")
+
+
     def run(self):
         """ Server Loop"""
         while True:
@@ -105,23 +133,13 @@ class Router:
                             data, client_addr = server.recvfrom(BUF_SIZE)
                             # Check if data is a valid packet and do stuff
                             
-                            #Checks what port we are receiving from, might need later.
+                            #Updates the forwarding table (hopefully)
+                            self.update_forwarding_table(data)
+
+                            #Checks what port we are receiving from, for debugging.
                             received_from_port = s.getsockname()[1]
+                        
                             
-                            #Checks the packet's hop count
-                            decoded = decode_entry(data)
-                            hop_count = decoded[2]
-                            
-                            #WE NEED TO CHECK THE FORWARDING TABLE FOR THE OUTPUT ADDRESS OF THE PORT!
-                            if hop_count < 15:
-                                #increase hop count
-                                decoded[2] += 1
-                                
-                                #Re-encode the message into the packet -NEEDS WORK-.
-                                
-                                
-                                #Send the message to the output from the forwarding table
-                                route(data, "INSERT OUTPUT ADDR tuple HERE")
                         else:
                             print("Server and Sockets not similar!")
 
