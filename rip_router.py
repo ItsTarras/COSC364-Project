@@ -21,8 +21,16 @@ class Router:
         
         self.sockets = []
     
-    def __str__(self):
-        return(f"router-id = {self.router_id} \ninput-ports = {self.input_ports} \noutput-ports = {self.outputs} \ntimeout_default= {self.timeout_default} \ntimeout_delta = {self.timeout_delta} \ntable = {self.forwarding_table}")
+    def __repr__(self):
+        return(f"Router({self.router_id})")
+    
+    def pretty_print(self):
+        print(f"Router Id: {self.router_id}")
+        print(f"Listening for updates on {len(self.input_ports)} port(s)")
+        print(f"Timeout: {self.timeout_default} seconds, +- {self.timeout_delta}")
+        
+        print(f"Neighboured to routers {', '.join([str(i.router_id) for i in self.outputs])}")
+        
     
     def random_timeout(self):
         """ Generate a uniformly distributed random timeout value"""
@@ -151,7 +159,7 @@ def main():
         print(f"Error: {e}")
         exit()
     try:
-        print(router)
+        router.pretty_print()
         router.open()
         try:
             router.run()
