@@ -101,31 +101,36 @@ class Router:
     
     def update_forwarding_table(self, data):
         #We need to check if the route was updated, and if so, send out a response.
-        updated = False
+        debug_updated = False
         
         #Breaking down and decoding the packet - Tarras Weir 10/03/2023
         command, version, sender_id, entries = decode_packet(data)
-        destination_id, metric = entries[1], entries[2]
         
-        #Checking if the destination ID is already within the forwarding table:
-        if destination_id in self.forwarding_table.keys():
-            #Now, check if the sender is the next hop for the destination.
-            if self.forwarding_table[destination_id][0] == sender_id:
-                #Compare the existing metrics
-                if metric + self.forwarding_table[sender_id][1] < \
-                   self.forwarding_table[destination_id][1]:
-                    self.forwarding_table[destination_id] = (sender_id, metric +\
-                                                             self.forwarding_table[sender_id][1])
-                    updated = True
+        #Updated loop - Tarras Weir 14/03/2023
+        for entry in entries:
+            destination_id, metric = entry[1], entry[2]
         
-        else:
-            #If it doesn't exist, put destination_id into the forwarding table.
-            self.forwarding_table[destination_id] = (sender_id, metric + self.forwarding_table[sender_id][1])
-            updated = True
-        
-        #Print a debug messgae if there was a successful update.
-        if updated is True:
-            print(f"Forwarding table was updated by {sender_id}")
+            #Checking if the destination ID is already within the forwarding table:
+            if destination_id in self.forwarding_table.keys():
+                #Now, check if the sender is the next hop for the destination.
+                if self.forwarding_table[destination_id][0] == sender_id:
+                    #Compare the existing metrics
+                    if metric + self.forwarding_table[sender_id][1] < \
+                       self.forwarding_table[destination_id][1]:
+                        self.forwarding_table[destination_id] = (sender_id, metric +\
+                                                                 self.forwarding_table[sender_id][1])
+                        debug_updated = True
+            
+            else:
+                #If it doesn't exist, put destination_id into the forwarding table.
+                self.forwarding_table[destination_id] = (sender_id, metric + self.forwarding_table[sender_id][1])
+                debug_updated = True
+            
+            #Print a debug messgae if there was a successful update.
+            if debug_updated is True:
+                print(f"Forwarding table was updated by {sender_id}")
+            else:
+                print(f"{forwarding_table[destination_id][0]} is not next hop - forwarding table unchanged")
 
 
     def run(self):
