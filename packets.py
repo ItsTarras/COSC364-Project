@@ -156,7 +156,7 @@ def check_config(config):
         if len(value) != 3:
             raise Exception("All values for 'outputs' must be 3 integers, each separated by '-'.")
         try:
-            port, metric, router_id = tuple(map(int, value))
+            port, metric, output_id = tuple(map(int, value))
         except ValueError:
             raise Exception("All components of a value for 'outputs' must be integers.")
         if 1024 > port or 64000 < port:
@@ -165,9 +165,9 @@ def check_config(config):
             raise Exception("port numbers in 'outputs' must not also be in 'input-ports'.")
         if 0 > metric or 16 < metric:
             raise Exception("the metric field for an 'outputs' value must be between 0 and 16.")
-        if 0 > router_id or 65536 < router_id:
+        if 0 > output_id or 65536 < output_id:
             raise Exception("the router-id field for an 'outputs' value must be between 0 and 65536")
-        outputs.append(RoutingEntry(router_id, port, metric))
+        outputs.append(RoutingEntry(output_id, port, metric))
     if len(config["timeout-default"]) > 1 or len(config["timeout-delta"]) > 1:
         raise Exception("A timeout parameter must be a single number")
     try:
