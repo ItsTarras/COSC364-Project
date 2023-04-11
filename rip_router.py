@@ -82,24 +82,6 @@ class Router:
             raise Exception('Unable to connect to server - connection refused.')        
         sock.close()        
     
-    def route(self, packet, destination):
-        """Reads from the forwarding table, and routes the message to the output port"""
-        
-        try:
-            port.sendto(packet, (destination[0], destination[1]))
-            print('Sent packet to: ', destination[0], '\n')
-        except:
-            print("Error in sending request to client")
-            
-        
-    def ping(self, input_ports, outputs):
-        """Use a timer to ping all ports periodically"""
-        pass
-    
-    def check_distance_vectors(self, data):
-        """ Compare incoming packet to existing forwarding tables"""
-        pass
-    
     
     def update_forwarding_table(self, data):
         #We need to check if the route was updated, and if so, send out a response.
@@ -137,17 +119,24 @@ class Router:
 
     def run(self):
         """ Server Loop"""
+        print(self.forwarding_table.items())
         while True:
             in_packets, _out_packets, _exceptions = select.select(self.sockets, [], self.sockets, self.random_timeout())
             if in_packets == []: # Timeout, send packet to each neighbour (poisoned reverse)
                 for neighbour in self.outputs:
                     entries_to_send = []
-                    for destination, (next_hop, metric) in self.forwarding_table.items():
+                    for destination, (next_hop, _, metric) in self.forwarding_table.items():
                         if next_hop == destination:
                             metric = 15
                         entries_to_send.append(generate_entry(2, destination, metric))
-                        generate_packet(2, 2, self.router_id, entries_to_send)
-                        address, port = socket.getaddrinfo("127.0.0.1", port)[0][4]
+                    
+                    generate_packet(2, 2, self.router_id, entries_to_send)
+                    
+                print("Timeout has occurred.") # Timeout occurred; we can run a ping command here.
+                    
+                    # ----------------------------- Work Required Below this line -----------------------------
+                    
+                
             else:
                 for server in in_packets:
                     for s in self.sockets:
@@ -165,9 +154,11 @@ class Router:
                         else:
                             print("Server and Sockets not similar!")
 
+
+
 def main():
     if len(sys.argv) == 1:
-        filename = 'config_1.txt'
+        filename = 'config.txt'
         print("DEBUG: Remove this condition before submission")
     elif len(sys.argv) == 2:
         filename = sys.argv[1]
