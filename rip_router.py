@@ -1,6 +1,7 @@
 import socket
 import select
 import sys
+from os import path
 from math import inf
 from packets import *
 import random
@@ -29,7 +30,8 @@ class Router:
         print(f"Listening for updates on {len(self.input_ports)} port(s)")
         print(f"Timeout: {self.timeout_default} seconds, +- {self.timeout_delta}")
         
-        print(f"Neighboured to routers {', '.join([str(i.router_id) for i in self.outputs])}")
+        print("Neighboured router(s): (id, metric)")
+        print(f"{', '.join([f'({i.router_id}, {i.metric})' for i in self.outputs])}")
         
     
     def random_timeout(self):
@@ -152,8 +154,14 @@ class Router:
                             print("Server and Sockets not similar!")
 
 def main():
-    try:
+    if len(sys.argv) == 1:
         filename = 'config_1.txt'
+        print("DEBUG: Remove this condition before submission")
+    elif len(sys.argv) == 2:
+        filename = sys.argv[1]
+    else:
+        print(f"Error: Too many arguments. usage: python3 {path.basename(__file__)} <filename>")
+    try:
         router = Router(*check_config(parse_config(filename)))
     except Exception as e:
         print(f"Error: {e}")
