@@ -117,10 +117,11 @@ class Router:
                 #Now, check if the sender is the next hop for the destination.
                 if self.forwarding_table[destination_id][0] == sender_id:
                     #Compare the existing metrics
-                    if metric + self.forwarding_table[sender_id][1] < \
-                       self.forwarding_table[destination_id][1]:
-                        self.forwarding_table[destination_id] = (sender_id, metric +\
-                                                                 self.forwarding_table[sender_id][1])
+                    if metric + self.forwarding_table[sender_id][1] < self.forwarding_table[destination_id][1]:
+                        self.forwarding_table[destination_id] = (
+                            sender_id,
+                            metric + self.forwarding_table[sender_id][1]
+                        )
                         debug_updated = True
             
             else:
@@ -132,15 +133,21 @@ class Router:
             if debug_updated is True:
                 print(f"Forwarding table was updated by {sender_id}")
             else:
-                print(f"{forwarding_table[destination_id][0]} is not next hop - forwarding table unchanged")
-
+                print(f"{self.forwarding_table[destination_id][0]} is not next hop - forwarding table unchanged")
 
     def run(self):
         """ Server Loop"""
         while True:
             in_packets, _out_packets, _exceptions = select.select(self.sockets, [], self.sockets, self.random_timeout())
-            if in_packets == []: # Timeout
-                pass
+            if in_packets == []: # Timeout, send packet to each neighbour (poisoned reverse)
+                for neighbour in self.outputs:
+                    entries_to_send = []
+                    for destination, (next_hop, metric) in self.forwarding_table.items():
+                        if next_hop == destination:
+                            metric = 15
+                        entries_to_send.append(generate_entry(2, destination, metric))
+                        generate_packet(2, 2, self.router_id, entries_to_send)
+                        address, port = socket.getaddrinfo("127.0.0.1", port)[0][4]
             else:
                 for server in in_packets:
                     for s in self.sockets:
