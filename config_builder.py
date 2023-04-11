@@ -74,7 +74,7 @@ def pretty_print(id_nums, adj_list):
     return string
     
     
-def main():
+def generate_configs():
     id_nums = set()
     while len(id_nums) < NUM_ROUTERS:
         id_nums.add(random.randint(ID_LOWER, ID_UPPER))
@@ -113,6 +113,7 @@ def main():
             config_file.write("\n\n# Timeout params:")
             config_file.write(f"\ntimeout-default {DEFAULT_DELAY}")
             config_file.write(f"\ntimeout-delta {DELAY_DELTA}")
+    return id_nums
     
 if __name__ == "__main__":
-    main()
+    generate_configs()
