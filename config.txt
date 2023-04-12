@@ -12,4 +12,7 @@ input-ports 61110
 
 outputs 6110-1-1,5001-2-4
 
+timeout-default 2
+timeout-delta 1
+
 # This is the end of the config file!
