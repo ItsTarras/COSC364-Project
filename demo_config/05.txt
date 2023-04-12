@@ -1,0 +1,19 @@
+# Testing set of config files
+#
+#   05-1--35    55
+#    | \   |     |
+#    3  5  2     1
+#    |   \ |     |
+#   15-1--25--2-45
+#
+
+router-id 5
+input-ports 05015,05025,05035
+
+
+
+
+outputs 15005-3-15,25005-5-25,35005-1-35
+
+timeout-default 2
+timeout-delta 1
