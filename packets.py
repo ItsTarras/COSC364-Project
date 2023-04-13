@@ -13,6 +13,7 @@ from collections import namedtuple
 COMMENT_CHAR = "#"
 RIP_VERSION = 2
 BUF_SIZE = 1024
+INF_METRIC = 16
 
 RoutingEntry = namedtuple("RoutingEntry", "router_id port metric")
 
@@ -39,7 +40,7 @@ Fields:
     sender-router-id:
         ID of the router that send the packet
     metric:
-        number in 1-15, specifies metric for destination, or 16 if infinity
+        number in 1-15, specifies metric for destination, or INF_METRIC if infinity
 """
 
 def to_binary(value, size, endian):
@@ -163,8 +164,8 @@ def check_config(config):
             raise Exception("The port field for an 'outputs' value must be between 1024 and 64000.")
         if port in input_ports:
             raise Exception("port numbers in 'outputs' must not also be in 'input-ports'.")
-        if 0 > metric or 16 < metric:
-            raise Exception("the metric field for an 'outputs' value must be between 0 and 16.")
+        if 0 > metric or INF_METRIC < metric:
+            raise Exception(f"the metric field for an 'outputs' value must be between 0 and {INF_METRIC}.")
         if 0 > output_id or 65536 < output_id:
             raise Exception("the router-id field for an 'outputs' value must be between 0 and 65536")
         outputs.append(RoutingEntry(output_id, port, metric))
