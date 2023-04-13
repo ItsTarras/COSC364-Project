@@ -5,6 +5,7 @@ from os import path
 from math import inf
 from packets import *
 import random
+from time import time
 
 
 class Router:
@@ -18,6 +19,9 @@ class Router:
         self.outputs = outputs
         self.timeout_default = timeout_default
         self.timeout_delta = timeout_delta
+        self.max_downtime = 3 * timeout_default
+        
+        self.last_packet = {out.router_id: None for out in self.outputs}
         
         self.sockets = []
     
@@ -66,17 +70,27 @@ class Router:
             server.close()     
     
     
-    def update_forwarding_table(self, data, port):
-        """Update forwarding table using an incoming packet"""
-        command, version, sender_id, entries = decode_packet(data)
+    def router_down(self, neighbour):
+        """Mark a router in the forwarding table as 'down'"""
+        print(f"Missing packets from router {neighbour}. Considering this router down.")
+        for destination_id in self.forwarding_table:
+            if self.forwarding_table[destination_id].router_id == neighbour: # next hop is the dead router
+                self.forwarding_table[destination_id] = RoutingEntry(
+                    self.forwarding_table[destination_id].router_id,
+                    self.forwarding_table[destination_id].port,
+                    INF_METRIC
+                )
         
+    
+    def update_forwarding_table(self, sender_id, entries, port):
+        """Update forwarding table using an incoming packet"""
         cost_to_sender = self.get_neighbour_cost(sender_id)
         
         for entry in entries:
             _, destination_id, metric = entry
             if destination_id != self.router_id:
                 if destination_id not in self.forwarding_table or cost_to_sender + metric < self.forwarding_table[destination_id].metric:
-                    self.forwarding_table[destination_id] = min(RoutingEntry(sender_id, port, cost_to_sender + metric), INF_METRIC)
+                    self.forwarding_table[destination_id] = RoutingEntry(sender_id, port, cost_to_sender + min(metric, INF_METRIC))
 
 
     def send_forwarding_table(self):
@@ -100,6 +114,11 @@ class Router:
             print(self.forwarding_table.items())
             in_packets, _out_packets, _exceptions = select.select(self.sockets, [], self.sockets, self.random_timeout())
             if in_packets == []: # Timeout, send packet to each neighbour (poisoned reverse)
+                
+                for neighbour in self.outputs:
+                    if self.last_packet[neighbour.router_id] is not None and self.last_packet[neighbour.router_id] + self.max_downtime < time():
+                        self.router_down(neighbour.router_id)
+                
                 self.send_forwarding_table()
             else:
                 for server in in_packets:
@@ -111,8 +130,12 @@ class Router:
                             #Checks what port we are receiving from, for debugging.
                             received_from_port = s.getsockname()[1]                            
                             
-                            #Updates the forwarding table (hopefully)
-                            self.update_forwarding_table(data, received_from_port)
+                            _, _, sender_id, entries = decode_packet(data)
+                            #Updates the forwarding table
+                            self.update_forwarding_table(sender_id, entries, received_from_port)
+                            
+                            #Update the time since this router was last heard from
+                            self.last_packet[sender_id] = time()
 
 
 def main():
