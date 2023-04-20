@@ -105,7 +105,10 @@ outputs: A list of port-metric-id groupings that the demon can communicate with
 
 def parse_config(filename):
     """ Takes the filename of a config file (with any file extension) and returns
-        the saved parameters"""
+        the saved parameters
+        Note that this file will return a dictionary including *all* parameters
+        in a config file - even those not used by a parent process.
+    """
     parameters = dict()
     try:
         with open(filename, 'r') as config:
@@ -128,7 +131,7 @@ def parse_config(filename):
 
 def check_config(config):
     """ Take parameters taken from a config file and check for correctness """
-    parameters = ['router-id', 'input-ports', 'outputs', 'timeout-default', 'timeout-delta']
+    parameters = ['router-id', 'input-ports', 'outputs', 'timeout-default', 'timeout-delta', 'route-timeout', 'garbage-timeout']
     if not all (i in config.keys() for i in parameters):
         raise Exception(f"config file is missing required parameters.")
     
@@ -169,14 +172,16 @@ def check_config(config):
         if 0 > output_id or 65536 < output_id:
             raise Exception("the router-id field for an 'outputs' value must be between 0 and 65536")
         outputs.append(RoutingEntry(output_id, port, metric, None))
-    if len(config["timeout-default"]) > 1 or len(config["timeout-delta"]) > 1:
+    if any([len(config[i]) > 1 for i in ['timeout-default', 'timeout-delta', 'route-timeout', 'garbage-timeout']]):
         raise Exception("A timeout parameter must be a single number")
     try:
         timeout_default = float(config["timeout-default"][0])
         timeout_delta = float(config["timeout-delta"][0])
+        route_timeout = float(config["route-timeout"][0])
+        garbage_timeout = float(config["garbage-timeout"][0])
     except ValueError:
         raise Exception("timeout parameters must be a number")
     if timeout_delta > timeout_default:
         raise Exception("timeout-delta must be less than timeout-default")
         
-    return router_id, input_ports, outputs, timeout_default, timeout_delta
+    return router_id, input_ports, outputs, (timeout_default, timeout_delta, route_timeout, garbage_timeout)

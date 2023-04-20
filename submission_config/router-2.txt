@@ -1,0 +1,14 @@
+# Config file for submission network
+
+router-id 2
+
+input-ports 2100,2300
+
+# outputs in the form port-metric-router_id
+outputs 1200-1-1,3200-3-3
+
+# Timeout params:
+timeout-default 30
+timeout-delta 5
+route-timeout 180
+garbage-timeout 300

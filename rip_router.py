@@ -9,7 +9,7 @@ from time import time
 
 
 class Router:
-    def __init__(self, router_id, input_ports, outputs, timeout_default, timeout_delta):
+    def __init__(self, router_id, input_ports, outputs, timers):
         self.forwarding_table = dict()
         #for i in outputs:
         #    self.forwarding_table[i.router_id] = i
@@ -17,10 +17,10 @@ class Router:
         self.router_id = router_id
         self.input_ports = input_ports
         self.outputs = outputs
-        self.timeout_default = timeout_default
-        self.timeout_delta = timeout_delta
-        self.max_downtime = 5 * timeout_default
-        self.garbage_time = 10 * timeout_default
+        self.timeout_default = timers[0]
+        self.timeout_delta = timers[1]
+        self.max_downtime = timers[2]
+        self.garbage_time = timers[3]
         
         self.sockets = []
     
@@ -32,9 +32,10 @@ class Router:
     def pretty_print(self):
         print(f"Router Id: {self.router_id}")
         print(f"Listening for updates on {len(self.input_ports)} port(s)")
-        print(f"Timeout: {self.timeout_default} seconds, +- {self.timeout_delta}")
+        print(f"Ping time: {self.timeout_default} seconds, +- {self.timeout_delta}")
+        print(f"    Route Timeout: {self.max_downtime}, Garbage Timeout: {self.garbage_time}")
         print("Neighboured router(s): (id, metric)")
-        print(f"{', '.join([f'({i.router_id}, {i.metric})' for i in self.outputs])}")
+        print(f"    {', '.join([f'({i.router_id}, {i.metric})' for i in self.outputs])}")
         
         
     def get_neighbour_cost(self, neighbour_id):
@@ -77,9 +78,19 @@ class Router:
                 self.forwarding_table.pop(destination_id)
                 print(f"{destination_id} is to be removed from the table")
     
+    def print_forwarding_table(self):
+        if not self.forwarding_table:
+            print("Forwarding Table is empty")
+        else:
+            print("Forwarding Table:")
+            print("    destination, next_hop, metric, time-last-updated")
+            for destination_id, entry in self.forwarding_table.items():
+                print(f"    {destination_id:<11}  {entry.router_id:<8}  {entry.metric:<6}  {entry.timeout}")
+    
     def update_forwarding_table(self, sender_id, entries, port):
         """Update forwarding table using an incoming packet"""
         cost_to_sender = self.get_neighbour_cost(sender_id)
+        has_updated = False
         print(f"Heard from router {sender_id}")
         print(f"Received information:")
         for entry in entries:
@@ -89,6 +100,7 @@ class Router:
             if destination_id != self.router_id:
                 if destination_id not in self.forwarding_table or cost_to_sender + metric < self.forwarding_table[destination_id].metric:
                     print(f"Found a better path to {destination_id} via {sender_id} (cost={min(cost_to_sender + metric, INF_METRIC)})")
+                    has_updated = True
                     self.forwarding_table[destination_id] = RoutingEntry(sender_id, port, min(cost_to_sender + metric, INF_METRIC), time())
                 #elif self.forwarding_table[destination_id].router_id == sender_id:
                     #self.forwarding_table[destination_id].timeout = time()
@@ -97,6 +109,8 @@ class Router:
             if table_entry.router_id == sender_id:
                 print(f"Updating timout for destination {destination_id}")
                 table_entry.timeout = time()
+        if has_updated:
+            self.print_forwarding_table()
 
 
     def send_forwarding_table(self):
@@ -117,8 +131,7 @@ class Router:
     def run(self):
         """ Server Loop"""
         while True:
-            print(self.forwarding_table.items())
-            in_packets, _out_packets, _exceptions = select.select(self.sockets, [], self.sockets, self.random_timeout())
+            in_packets, _out_packets, _exceptions = select.select(self.sockets, [], [], self.random_timeout())
             if in_packets == []: # Timeout, send packet to each neighbour (poisoned reverse)
                 
                 self.check_router_down()

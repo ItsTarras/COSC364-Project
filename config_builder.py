@@ -14,6 +14,8 @@ ID_UPPER = NUM_ROUTERS * 3
 CONFIG_LOCATION = "generated_config"
 DEFAULT_DELAY = 30
 DELAY_DELTA = 5
+ROUTER_TIMEOUT = 180
+GARBAGE_TIMEOUT = 300
 
 def generate_adjacency_list(nodes):
     adj_list = {i: {j: (None, None) for j in nodes} for i in nodes}
@@ -113,6 +115,8 @@ def generate_configs():
             config_file.write("\n\n# Timeout params:")
             config_file.write(f"\ntimeout-default {DEFAULT_DELAY}")
             config_file.write(f"\ntimeout-delta {DELAY_DELTA}")
+            config_file.write(f"\nroute-timeout {ROUTER_TIMEOUT}")
+            config_file.write(f"\ngarbage-timeout {GARBAGE_TIMEOUT}")
     return id_nums
     
 if __name__ == "__main__":
