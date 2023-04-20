@@ -19,9 +19,8 @@ class Router:
         self.outputs = outputs
         self.timeout_default = timeout_default
         self.timeout_delta = timeout_delta
-        self.max_downtime = 3 * timeout_default
-        
-        self.last_packet = {out.router_id: None for out in self.outputs}
+        self.max_downtime = 5 * timeout_default
+        self.garbage_time = 10 * timeout_default
         
         self.sockets = []
     
@@ -34,7 +33,6 @@ class Router:
         print(f"Router Id: {self.router_id}")
         print(f"Listening for updates on {len(self.input_ports)} port(s)")
         print(f"Timeout: {self.timeout_default} seconds, +- {self.timeout_delta}")
-        
         print("Neighboured router(s): (id, metric)")
         print(f"{', '.join([f'({i.router_id}, {i.metric})' for i in self.outputs])}")
         
@@ -69,41 +67,49 @@ class Router:
         for server in self.sockets:
             server.close()     
     
-    
-    def router_down(self, neighbour):
-        """Mark a router in the forwarding table as 'down'"""
-        print(f"Missing packets from router {neighbour}. Considering this router down.")
-        for destination_id in self.forwarding_table:
-            if self.forwarding_table[destination_id].router_id == neighbour: # next hop is the dead router
-                self.forwarding_table[destination_id] = RoutingEntry(
-                    self.forwarding_table[destination_id].router_id,
-                    self.forwarding_table[destination_id].port,
-                    INF_METRIC
-                )
-        
+    def check_router_down(self):
+        """forwarding table to see if any routers should be marked as down"""
+        for destination_id, entry in self.forwarding_table.items():
+            if entry.timeout + self.max_downtime < time(): # Mark destination as unreachable
+                self.forwarding_table[destination_id].metric = INF_METRIC
+                print(f"{destination_id} is unreachable")
+            elif entry.timeout + self.garbage_time < time(): # Remove entry from table entirely
+                self.forwarding_table.pop(destination_id)
+                print(f"{destination_id} is to be removed from the table")
     
     def update_forwarding_table(self, sender_id, entries, port):
         """Update forwarding table using an incoming packet"""
         cost_to_sender = self.get_neighbour_cost(sender_id)
-        
+        print(f"Heard from router {sender_id}")
+        print(f"Received information:")
+        for entry in entries:
+            print(f"    {entry[1]}, {entry[2]}")
         for entry in entries:
             _, destination_id, metric = entry
             if destination_id != self.router_id:
                 if destination_id not in self.forwarding_table or cost_to_sender + metric < self.forwarding_table[destination_id].metric:
-                    self.forwarding_table[destination_id] = RoutingEntry(sender_id, port, cost_to_sender + min(metric, INF_METRIC))
+                    print(f"Found a better path to {destination_id} via {sender_id} (cost={min(cost_to_sender + metric, INF_METRIC)})")
+                    self.forwarding_table[destination_id] = RoutingEntry(sender_id, port, min(cost_to_sender + metric, INF_METRIC), time())
+                #elif self.forwarding_table[destination_id].router_id == sender_id:
+                    #self.forwarding_table[destination_id].timeout = time()
+        
+        for destination_id, table_entry in self.forwarding_table.items():
+            if table_entry.router_id == sender_id:
+                print(f"Updating timout for destination {destination_id}")
+                table_entry.timeout = time()
 
 
     def send_forwarding_table(self):
         for neighbour in self.outputs:
             entries_to_send = [generate_entry(2, self.router_id, 0)]
-            for destination, (next_hop, _, metric) in self.forwarding_table.items():
+            for destination, (next_hop, _, metric, _) in self.forwarding_table.items():
                 if next_hop == neighbour.port:
                     metric = 15
                 entries_to_send.append(generate_entry(2, destination, metric))
             
             rip_packet = generate_packet(2, 2, self.router_id, entries_to_send)
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # Initialise UDP socket
-            sock.settimeout(1)
+            sock.setblocking(False)
             sock.connect(("127.0.0.1", neighbour.port)) # attempt to connect to server
             sock.sendall(rip_packet) # send dt_request        
 
@@ -115,10 +121,7 @@ class Router:
             in_packets, _out_packets, _exceptions = select.select(self.sockets, [], self.sockets, self.random_timeout())
             if in_packets == []: # Timeout, send packet to each neighbour (poisoned reverse)
                 
-                for neighbour in self.outputs:
-                    if self.last_packet[neighbour.router_id] is not None and self.last_packet[neighbour.router_id] + self.max_downtime < time():
-                        self.router_down(neighbour.router_id)
-                
+                self.check_router_down()
                 self.send_forwarding_table()
             else:
                 for server in in_packets:
@@ -133,9 +136,6 @@ class Router:
                             _, _, sender_id, entries = decode_packet(data)
                             #Updates the forwarding table
                             self.update_forwarding_table(sender_id, entries, received_from_port)
-                            
-                            #Update the time since this router was last heard from
-                            self.last_packet[sender_id] = time()
 
 
 def main():
@@ -151,18 +151,18 @@ def main():
     except Exception as e:
         print(f"Error: {e}")
         exit()
+    #try:
+    router.pretty_print()
+    router.open()
     try:
-        router.pretty_print()
-        router.open()
-        try:
-            router.run()
-        except KeyboardInterrupt:
-            router.close()
-            print("Keyboard Interrupt: Stopping Server")
-    except Exception as e:
-        print(f"Error: {type(e).__name__}, {e}")
+        router.run()
+    except KeyboardInterrupt:
         router.close()
-        exit() 
+        print("Keyboard Interrupt: Stopping Server")
+    #except Exception as e:
+        #print(f"Error: {type(e).__name__}, {e}")
+        #router.close()
+        #exit() 
 
 if __name__ == "__main__":
     main()

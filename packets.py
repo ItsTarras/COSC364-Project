@@ -8,14 +8,14 @@ Max Croucher - 23/2/23
 # Test edge cases
 # Read spec sheet and ensure correctness of these functions
 
-from collections import namedtuple
+from recordclass import recordclass
 
 COMMENT_CHAR = "#"
 RIP_VERSION = 2
 BUF_SIZE = 1024
 INF_METRIC = 16
 
-RoutingEntry = namedtuple("RoutingEntry", "router_id port metric")
+RoutingEntry = recordclass("RoutingEntry", "router_id port metric timeout")
 
 """
 RIP Packet Format:
@@ -168,7 +168,7 @@ def check_config(config):
             raise Exception(f"the metric field for an 'outputs' value must be between 0 and {INF_METRIC}.")
         if 0 > output_id or 65536 < output_id:
             raise Exception("the router-id field for an 'outputs' value must be between 0 and 65536")
-        outputs.append(RoutingEntry(output_id, port, metric))
+        outputs.append(RoutingEntry(output_id, port, metric, None))
     if len(config["timeout-default"]) > 1 or len(config["timeout-delta"]) > 1:
         raise Exception("A timeout parameter must be a single number")
     try:
