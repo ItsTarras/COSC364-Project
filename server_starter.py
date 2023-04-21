@@ -27,13 +27,15 @@ def run_test_router(router_id, prefix):
 
 
 def run_test_configs(prefix):
-    id_names = os.listdir(SUBMISSION_PREFIX)
+    id_names = os.listdir(prefix)
     processes = []
     for router_id in id_names:
-        processes.append(multiprocessing.Process(target=run_test_router, args=(router_id, prefix)))
+        if router_id.endswith(".txt"):
+            processes.append(multiprocessing.Process(target=run_test_router, args=(router_id, prefix)))
     
     for i in processes:
         i.start()
 if __name__ == "__main__":
     #main()
-    run_test_configs(SUBMISSION_PREFIX)
+    #run_test_configs(SUBMISSION_PREFIX)
+    run_test_configs(TESTING_PREFIX)

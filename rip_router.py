@@ -21,13 +21,14 @@ class Router:
         self.timeout_delta = timers[1]
         self.max_downtime = timers[2]
         self.garbage_time = timers[3]
-        
         self.sockets = []
+        
+        self.reset_timer()
     
     
     def __repr__(self):
         return(f"Router({self.router_id})")
-    
+
     
     def pretty_print(self):
         print(f"Router Id: {self.router_id}")
@@ -39,16 +40,22 @@ class Router:
         
         
     def get_neighbour_cost(self, neighbour_id):
-        """Look through list of directly attached neighbours and find the cost of a given neighbour"""
+        """ Look through list of directly attached neighbours and find the cost of a given neighbour"""
         for neighbour in self.outputs:
             if neighbour.router_id == neighbour_id:
                 return neighbour.metric
         raise Exception("Recieved packet from unconfigured router")
     
     
-    def random_timeout(self):
-        """ Generate a uniformly distributed random timeout value"""
-        return self.timeout_default + round(random.uniform(-self.timeout_delta, self.timeout_delta), 2)
+    def get_update_time(self):
+        """ Get the time in seconds until the router needs to update all neighbours"""
+        return self.last_update - time() + self.current_timeout
+
+    
+    def reset_timer(self):
+        """ Reset update timer with a uniformly distributed random timeout value"""
+        self.current_timeout = self.timeout_default + round(random.uniform(-self.timeout_delta, self.timeout_delta), 2)
+        self.last_update = time()
     
     
     def open(self):
@@ -68,15 +75,6 @@ class Router:
         for server in self.sockets:
             server.close()     
     
-    def check_router_down(self):
-        """forwarding table to see if any routers should be marked as down"""
-        for destination_id, entry in self.forwarding_table.items():
-            if entry.timeout + self.max_downtime < time(): # Mark destination as unreachable
-                self.forwarding_table[destination_id].metric = INF_METRIC
-                print(f"{destination_id} is unreachable")
-            elif entry.timeout + self.garbage_time < time(): # Remove entry from table entirely
-                self.forwarding_table.pop(destination_id)
-                print(f"{destination_id} is to be removed from the table")
     
     def print_forwarding_table(self):
         if not self.forwarding_table:
@@ -85,30 +83,42 @@ class Router:
             print("Forwarding Table:")
             print("    destination, next_hop, metric, time-last-updated")
             for destination_id, entry in self.forwarding_table.items():
-                print(f"    {destination_id:<11}  {entry.router_id:<8}  {entry.metric:<6}  {entry.timeout}")
+                print(f"    {destination_id:<11}  {entry.router_id:<8}  {entry.metric:<6}  {entry.timeout:.2f}")
+                
+                
+    def check_router_down(self):
+        """forwarding table to see if any routers should be marked as down"""
+        has_updated = False
+        routes_to_remove = []
+        for destination_id, entry in self.forwarding_table.items():
+            if entry.timeout + self.garbage_time < time(): # Remove entry from table entirely
+                routes_to_remove.append(destination_id)
+                print(f"{destination_id} is to be removed from the table")
+                has_updated = True
+            elif entry.timeout + self.max_downtime < time(): # Mark destination as unreachable
+                self.forwarding_table[destination_id].metric = INF_METRIC
+                has_updated = True
+                print(f"{destination_id} is unreachable")
+        
+        for route in routes_to_remove:
+            self.forwarding_table.pop(route)            
+        
+        if has_updated:
+            self.print_forwarding_table()
     
-    def update_forwarding_table(self, sender_id, entries, port):
+    
+    def update_forwarding_table(self, sender_id, entries):
         """Update forwarding table using an incoming packet"""
         cost_to_sender = self.get_neighbour_cost(sender_id)
         has_updated = False
-        print(f"Heard from router {sender_id}")
-        print(f"Received information:")
-        for entry in entries:
-            print(f"    {entry[1]}, {entry[2]}")
         for entry in entries:
             _, destination_id, metric = entry
             if destination_id != self.router_id:
                 if destination_id not in self.forwarding_table or cost_to_sender + metric < self.forwarding_table[destination_id].metric:
-                    print(f"Found a better path to {destination_id} via {sender_id} (cost={min(cost_to_sender + metric, INF_METRIC)})")
                     has_updated = True
-                    self.forwarding_table[destination_id] = RoutingEntry(sender_id, port, min(cost_to_sender + metric, INF_METRIC), time())
-                #elif self.forwarding_table[destination_id].router_id == sender_id:
-                    #self.forwarding_table[destination_id].timeout = time()
-        
-        for destination_id, table_entry in self.forwarding_table.items():
-            if table_entry.router_id == sender_id:
-                print(f"Updating timout for destination {destination_id}")
-                table_entry.timeout = time()
+                    self.forwarding_table[destination_id] = RoutingEntry(sender_id, None, min(cost_to_sender + metric, INF_METRIC), time())
+                elif cost_to_sender + metric == self.forwarding_table[destination_id].metric:
+                    self.forwarding_table[destination_id].timeout = time()
         if has_updated:
             self.print_forwarding_table()
 
@@ -116,39 +126,41 @@ class Router:
     def send_forwarding_table(self):
         for neighbour in self.outputs:
             entries_to_send = [generate_entry(2, self.router_id, 0)]
-            for destination, (next_hop, _, metric, _) in self.forwarding_table.items():
-                if next_hop == neighbour.port:
-                    metric = 15
-                entries_to_send.append(generate_entry(2, destination, metric))
+            for destination, table_entry in self.forwarding_table.items():
+                if table_entry.router_id == neighbour.router_id: # poisoned reverse
+                    metric = INF_METRIC
+                else:
+                    metric = table_entry.metric
+                if table_entry.timeout + self.max_downtime >= time(): # don't send information about timed out routes
+                    entries_to_send.append(generate_entry(2, destination, metric))
             
             rip_packet = generate_packet(2, 2, self.router_id, entries_to_send)
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # Initialise UDP socket
             sock.setblocking(False)
             sock.connect(("127.0.0.1", neighbour.port)) # attempt to connect to server
-            sock.sendall(rip_packet) # send dt_request        
-
+            sock.sendall(rip_packet)
+        
+        self.reset_timer()
 
     def run(self):
         """ Server Loop"""
         while True:
-            in_packets, _out_packets, _exceptions = select.select(self.sockets, [], [], self.random_timeout())
-            if in_packets == []: # Timeout, send packet to each neighbour (poisoned reverse)
-                
+            if self.get_update_time() < 0:
+                print(f"timeout {self.current_timeout:.2f} {self.get_update_time():.2f}")
                 self.check_router_down()
-                self.send_forwarding_table()
-            else:
+                self.send_forwarding_table()            
+            in_packets, _out_packets, _exceptions = select.select(self.sockets, [], [], self.get_update_time())
+            if in_packets != []:
+                print(f"got packet {self.get_update_time():.2f}")
                 for server in in_packets:
                     for s in self.sockets:
                         if server is s: # Received packet
                             data, client_addr = server.recvfrom(BUF_SIZE)
                             # Check if data is a valid packet and do stuff
                             
-                            #Checks what port we are receiving from, for debugging.
-                            received_from_port = s.getsockname()[1]                            
-                            
                             _, _, sender_id, entries = decode_packet(data)
                             #Updates the forwarding table
-                            self.update_forwarding_table(sender_id, entries, received_from_port)
+                            self.update_forwarding_table(sender_id, entries)
 
 
 def main():
