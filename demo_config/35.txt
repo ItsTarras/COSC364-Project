@@ -15,5 +15,8 @@ input-ports 35005,35025
 
 outputs 05035-1-5,25035-2-25
 
-timeout-default 2
+timeout-default 4
 timeout-delta 1
+route-timeout 12
+garbage-timeout 20
+trigger-timeout 1,5

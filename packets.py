@@ -131,7 +131,7 @@ def parse_config(filename):
 
 def check_config(config):
     """ Take parameters taken from a config file and check for correctness """
-    parameters = ['router-id', 'input-ports', 'outputs', 'timeout-default', 'timeout-delta', 'route-timeout', 'garbage-timeout']
+    parameters = ['router-id', 'input-ports', 'outputs', 'timeout-default', 'timeout-delta', 'route-timeout', 'garbage-timeout', 'trigger-timeout']
     if not all (i in config.keys() for i in parameters):
         raise Exception(f"config file is missing required parameters.")
     
@@ -183,5 +183,16 @@ def check_config(config):
         raise Exception("timeout parameters must be a number")
     if timeout_delta > timeout_default:
         raise Exception("timeout-delta must be less than timeout-default")
+    if route_timeout >= garbage_timeout:
+        raise Exception("garbage-timeout must be greater than route-timeout")
+    trigger_timeout = config["trigger-timeout"]
+    if len(trigger_timeout) != 2:
+        raise Exception("trigger-timeout must contain two comma-separated integers")
+    try:
+        trigger_timeout = tuple(map(int, trigger_timeout))
+    except ValueError:
+        raise Exception("trigger-timeout must contain two comma-separated integers")
+    if trigger_timeout[0] >= trigger_timeout[1]:
+        raise Exception("The first value in trigger-timeout must be lower than the second")
         
-    return router_id, input_ports, outputs, (timeout_default, timeout_delta, route_timeout, garbage_timeout)
+    return router_id, input_ports, outputs, ((timeout_default, timeout_delta), route_timeout, garbage_timeout, trigger_timeout)

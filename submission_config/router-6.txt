@@ -12,3 +12,4 @@ timeout-default 30
 timeout-delta 5
 route-timeout 180
 garbage-timeout 300
+trigger-timeout 1,5
