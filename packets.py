@@ -15,7 +15,7 @@ RIP_VERSION = 2
 BUF_SIZE = 1024
 INF_METRIC = 16
 
-RoutingEntry = recordclass("RoutingEntry", "router_id port metric timeout")
+RoutingEntry = recordclass("RoutingEntry", "router_id port metric timeout garbage")
 
 """
 RIP Packet Format:
@@ -171,7 +171,7 @@ def check_config(config):
             raise Exception(f"the metric field for an 'outputs' value must be between 0 and {INF_METRIC}.")
         if 0 > output_id or 65536 < output_id:
             raise Exception("the router-id field for an 'outputs' value must be between 0 and 65536")
-        outputs.append(RoutingEntry(output_id, port, metric, None))
+        outputs.append(RoutingEntry(output_id, port, metric, None, None))
     if any([len(config[i]) > 1 for i in ['timeout-default', 'timeout-delta', 'route-timeout', 'garbage-timeout']]):
         raise Exception("A timeout parameter must be a single number")
     try:

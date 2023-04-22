@@ -24,6 +24,7 @@ class Router:
         self.sockets = []
         
         self.reset_timer()
+        self.schedule_update = False
     
     
     def __repr__(self):
@@ -81,9 +82,11 @@ class Router:
             print("Forwarding Table is empty")
         else:
             print("Forwarding Table:")
-            print("    destination, next_hop, metric, time-last-updated")
+            print("    destination, next_hop, metric, last-updated, garbage-timer")
             for destination_id, entry in self.forwarding_table.items():
-                print(f"    {destination_id:<11}  {entry.router_id:<8}  {entry.metric:<6}  {entry.timeout:.2f}")
+                timeout = '-' if entry.timeout is None else f"{entry.timeout:.1f}"
+                garbage = '-' if entry.garbage is None else f"{entry.garbage:.1f}"
+                print(f"    {destination_id:<11}  {entry.router_id:<8}  {entry.metric:<6}  {timeout:<12}  {garbage}")
                 
                 
     def check_router_down(self):
@@ -91,14 +94,17 @@ class Router:
         has_updated = False
         routes_to_remove = []
         for destination_id, entry in self.forwarding_table.items():
-            if entry.timeout + self.garbage_time < time(): # Remove entry from table entirely
+            if entry.garbage is not None and entry.garbage + self.garbage_time < time(): # Remove entry from table entirely
                 routes_to_remove.append(destination_id)
                 print(f"{destination_id} is to be removed from the table")
                 has_updated = True
-            elif entry.timeout + self.max_downtime < time(): # Mark destination as unreachable
+            elif entry.timeout is not None and entry.timeout + self.max_downtime < time(): # Mark destination as unreachable
                 self.forwarding_table[destination_id].metric = INF_METRIC
+                self.forwarding_table[destination_id].garbage = time()
+                self.forwarding_table[destination_id].timeout = None
                 has_updated = True
                 print(f"{destination_id} is unreachable")
+            
         
         for route in routes_to_remove:
             self.forwarding_table.pop(route)            
@@ -109,18 +115,41 @@ class Router:
     
     def update_forwarding_table(self, sender_id, entries):
         """Update forwarding table using an incoming packet"""
-        cost_to_sender = self.get_neighbour_cost(sender_id)
         has_updated = False
         for entry in entries:
             _, destination_id, metric = entry
-            if destination_id != self.router_id:
-                if destination_id not in self.forwarding_table or cost_to_sender + metric < self.forwarding_table[destination_id].metric:
-                    has_updated = True
-                    self.forwarding_table[destination_id] = RoutingEntry(sender_id, None, min(cost_to_sender + metric, INF_METRIC), time())
-                elif cost_to_sender + metric == self.forwarding_table[destination_id].metric:
-                    self.forwarding_table[destination_id].timeout = time()
-        if has_updated:
-            self.print_forwarding_table()
+            if destination_id != self.router_id: #Ignore routes to self
+                cost = min(self.get_neighbour_cost(sender_id) + metric, INF_METRIC)
+                if destination_id not in self.forwarding_table or self.forwarding_table[destination_id].garbage is not None:
+                    # Add an unknown or marked-for-garbage route
+                    if cost < INF_METRIC:
+                        #Don't bother adding a route with an infinite cost
+                        self.forwarding_table[destination_id] = RoutingEntry(sender_id, None, cost, time(), None)
+                        has_updated = True
+                else:
+                    route = self.forwarding_table[destination_id]
+                    if route.router_id == sender_id:
+                        # Reset timeout or re-enable a route if the route is confirmed alive by the next_hop
+                        route.timeout = time()
+                        if route.garbage is not None:
+                            route.metric = cost
+                            route.garbage = None
+                    if route.router_id == (sender_id and route.metric != cost) or (route.router_id != sender_id and route.metric > cost):
+                        # Update forwarding table if needed
+                        route.metric = cost
+                        route.router_id = sender_id
+                        has_updated = True
+                        if cost == INF_METRIC:
+                            route.timeout = None
+                            route.garbage = time()
+                        else:
+                            route.timeout = time()
+            
+            if has_updated:
+                #Print new table and schedule a triggered update
+                self.print_forwarding_table()
+                self.schedule_update = True
+                    
 
 
     def send_forwarding_table(self):
@@ -131,7 +160,7 @@ class Router:
                     metric = INF_METRIC
                 else:
                     metric = table_entry.metric
-                if table_entry.timeout + self.max_downtime >= time(): # don't send information about timed out routes
+                if table_entry.timeout is not None: # don't send information about timed out routes
                     entries_to_send.append(generate_entry(2, destination, metric))
             
             rip_packet = generate_packet(2, 2, self.router_id, entries_to_send)
@@ -139,27 +168,26 @@ class Router:
             sock.setblocking(False)
             sock.connect(("127.0.0.1", neighbour.port)) # attempt to connect to server
             sock.sendall(rip_packet)
-        
-        self.reset_timer()
 
     def run(self):
         """ Server Loop"""
         while True:
-            if self.get_update_time() < 0:
+            if self.schedule_update or self.get_update_time() < 0.1:
                 print(f"timeout {self.current_timeout:.2f} {self.get_update_time():.2f}")
                 self.check_router_down()
-                self.send_forwarding_table()            
+                self.send_forwarding_table()
+                self.schedule_update = False
+                if self.get_update_time() < 0.1: #Only reset response timer if needed
+                    self.reset_timer()
+                    
             in_packets, _out_packets, _exceptions = select.select(self.sockets, [], [], self.get_update_time())
             if in_packets != []:
                 print(f"got packet {self.get_update_time():.2f}")
                 for server in in_packets:
                     for s in self.sockets:
-                        if server is s: # Received packet
+                        if server is s: # read packet from correct port
                             data, client_addr = server.recvfrom(BUF_SIZE)
-                            # Check if data is a valid packet and do stuff
-                            
                             _, _, sender_id, entries = decode_packet(data)
-                            #Updates the forwarding table
                             self.update_forwarding_table(sender_id, entries)
 
 
