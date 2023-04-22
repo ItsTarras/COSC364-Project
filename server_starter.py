@@ -7,10 +7,9 @@ Max Croucher
 
 import multiprocessing
 from os import listdir, path, system
-import config_builder
 
 ROUTER_FILENAME = "rip_router.py"
-GENERATED_PATH = config_builder.CONFIG_LOCATION
+GENERATED_PATH = "generated_config"
 TESTING_PREFIX = "demo_config"
 SUBMISSION_PREFIX = "submission_config"
 CONFIG_SUFFIX = ".txt"
@@ -36,4 +35,4 @@ def launch_network(prefix):
 
 
 if __name__ == "__main__":
-    launch_network(GENERATED_PATH)
+    launch_network(SUBMISSION_PREFIX)
