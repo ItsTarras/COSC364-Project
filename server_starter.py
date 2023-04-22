@@ -1,41 +1,39 @@
-import config_builder
-import os
-import multiprocessing
+"""
+Driver program for starting several instances of RIP version 2 on different threads.
+    This program calls gnome-terminal for displaying each router, so will not work on Windows.
+Max Croucher
+12 Apr, 2023
+"""
 
-config_builder.NUM_ROUTERS = 8
+import multiprocessing
+from os import listdir, path, system
+import config_builder
 
 ROUTER_FILENAME = "rip_router.py"
-CONFIG_PREFIX = f"{config_builder.CONFIG_LOCATION}/config_"
+GENERATED_PATH = config_builder.CONFIG_LOCATION
+TESTING_PREFIX = "demo_config"
+SUBMISSION_PREFIX = "submission_config"
 CONFIG_SUFFIX = ".txt"
-TESTING_PREFIX = "demo_config/"
-SUBMISSION_PREFIX = "submission_config/"
 
-def run_router(router_id):
-    os.system(f"gnome-terminal -- bash -c \"python3 {ROUTER_FILENAME} {CONFIG_PREFIX}{router_id}{CONFIG_SUFFIX}; bash\" ")
-
-def main():
-    id_nums = config_builder.generate_configs()
-    processes = []
-    for router_id in id_nums:
-        processes.append(multiprocessing.Process(target=run_router, args=(router_id, )))
-    
-    for i in processes:
-        i.start()
-
-def run_test_router(router_id, prefix):
-    os.system(f"gnome-terminal --title=\"Router {router_id}\" -- bash -c \"python3 {ROUTER_FILENAME} {prefix}{router_id}; bash\" ")
+def run_router(router_path):
+    """ Launch a router"""
+    command = f"python3 {ROUTER_FILENAME} {router_path}; bash"
+    name = path.split(router_path)[1]
+    system(f"gnome-terminal --title=\"Router {name}\" -- bash -c \"{command}\"")
 
 
-def run_test_configs(prefix):
-    id_names = os.listdir(prefix)
+def launch_network(prefix):
+    """Iterate through a given directory and launch a router for each"""
+    id_names = listdir(prefix)
     processes = []
     for router_id in id_names:
         if router_id.endswith(".txt"):
-            processes.append(multiprocessing.Process(target=run_test_router, args=(router_id, prefix)))
-    
+            processes.append(
+                multiprocessing.Process(target=run_router, args=(path.join(prefix, router_id),))
+            )
     for i in processes:
         i.start()
+
+
 if __name__ == "__main__":
-    #main()
-    #run_test_configs(SUBMISSION_PREFIX)
-    run_test_configs(TESTING_PREFIX)
+    launch_network(GENERATED_PATH)

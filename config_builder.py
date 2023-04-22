@@ -16,6 +16,7 @@ DEFAULT_DELAY = 30
 DELAY_DELTA = 5
 ROUTER_TIMEOUT = 180
 GARBAGE_TIMEOUT = 300
+TRIGGER_TIMEOUT = (1,5)
 
 def generate_adjacency_list(nodes):
     adj_list = {i: {j: (None, None) for j in nodes} for i in nodes}
@@ -117,6 +118,7 @@ def generate_configs():
             config_file.write(f"\ntimeout-delta {DELAY_DELTA}")
             config_file.write(f"\nroute-timeout {ROUTER_TIMEOUT}")
             config_file.write(f"\ngarbage-timeout {GARBAGE_TIMEOUT}")
+            config_file.write(f"\ntrigger-timeout {TRIGGER_TIMEOUT[0]},{TRIGGER_TIMEOUT[1]}")
     return id_nums
     
 if __name__ == "__main__":

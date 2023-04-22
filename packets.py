@@ -1,12 +1,8 @@
 """
 Utility Functions for Implementing RIP version 2 in Python
-Max Croucher - 23/2/23
+Max Croucher
+23 Feb, 2023
 """
-
-# TO-DO:
-# Implement error capturing for these modules
-# Test edge cases
-# Read spec sheet and ensure correctness of these functions
 
 from recordclass import recordclass
 
@@ -17,31 +13,6 @@ INF_METRIC = 16
 
 RoutingEntry = recordclass("RoutingEntry", "router_id port metric timeout garbage")
 
-"""
-RIP Packet Format:
-    command (8b)
-    version (8b)
-    sender-router-id (16b)
-    Entries (20b each), between 1 and 25
-
-RIP Entry Format:
-    addr family id: (16b)
-    zero-arr: (16b)
-    router-id: (32b)
-    zero-arr: (64b)
-    metric: (32b)
-
-Fields:
-    command:
-        1 - request
-        2 - response
-    version:
-        should always be 2
-    sender-router-id:
-        ID of the router that send the packet
-    metric:
-        number in 1-15, specifies metric for destination, or INF_METRIC if infinity
-"""
 
 def to_binary(value, size, endian):
     """ Convert an integer to a binary integer with a specified size"""
@@ -49,6 +20,7 @@ def to_binary(value, size, endian):
         raise Exception("The number is too large for the speficied number of bytes.")
     else:
         return value.to_bytes(size, endian)
+
 
 def generate_entry(family_id, router_id, metric):
     """ Takes and IP address and metric as integers and returns an RIP entry
@@ -98,14 +70,26 @@ Config File Specifications:
 Parameters are specified in the <name><space><data> format, with data separated
 with just a comma. Blank lines and comments beginning with a # are ignored.
 The essential parameters for any config file are:
+
 router-id: Unique Identifier for a router
 input-ports: A list of ports the demon listens for packets from (1024 <= x <= 64000)
 outputs: A list of port-metric-id groupings that the demon can communicate with
+timeout-default: The average time between two periodic updates
+timeout-delta: The variance in each direction for the period of a periodic update.
+    Between these two parameters, a timeout is chosen from a uniform distribution between
+    timeout-default - timeout-delta and timeout-default + timeout-delta
+route-timeout: The maximum time a router waits after recieving an update on a route
+    before timing out the route
+garbage-timeout: The maximum time a router waits after timing out a route before
+    deleting it from the routing table entirely
+trigger-timeout: two comma-separated floats that represent the minimum and maximum
+    for a random delay chosen between two triggered updates to prevent unnessecary
+    load on a network
 """
 
 def parse_config(filename):
     """ Takes the filename of a config file (with any file extension) and returns
-        the saved parameters
+        the saved parameters.
         Note that this file will return a dictionary including *all* parameters
         in a config file - even those not used by a parent process.
     """
@@ -172,6 +156,8 @@ def check_config(config):
         if 0 > output_id or 65536 < output_id:
             raise Exception("the router-id field for an 'outputs' value must be between 0 and 65536")
         outputs.append(RoutingEntry(output_id, port, metric, None, None))
+    
+    # Ensure correctness of all timing parameters
     if any([len(config[i]) > 1 for i in ['timeout-default', 'timeout-delta', 'route-timeout', 'garbage-timeout']]):
         raise Exception("A timeout parameter must be a single number")
     try:
