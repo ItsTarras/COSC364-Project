@@ -17,13 +17,14 @@ class Router:
         self.router_id = router_id
         self.input_ports = input_ports
         self.outputs = outputs
-        self.timeout_default = timers[0]
-        self.timeout_delta = timers[1]
-        self.max_downtime = timers[2]
-        self.garbage_time = timers[3]
+        self.periodic_timeout = timers[0]
+        self.max_downtime = timers[1]
+        self.garbage_time = timers[2]
+        self.trigger_timer = timers[3]
         self.sockets = []
         
-        self.reset_timer()
+        self.reset_periodic_timer()
+        self.reset_triggered_timer()
         self.schedule_update = False
     
     
@@ -34,8 +35,11 @@ class Router:
     def pretty_print(self):
         print(f"Router Id: {self.router_id}")
         print(f"Listening for updates on {len(self.input_ports)} port(s)")
-        print(f"Ping time: {self.timeout_default} seconds, +- {self.timeout_delta}")
-        print(f"    Route Timeout: {self.max_downtime}, Garbage Timeout: {self.garbage_time}")
+        print("Timers:")
+        print(f"    Routing Update Time: {self.periodic_timeout[0]} seconds, +- {self.periodic_timeout[1]}")
+        print(f"    Route Timeout: {self.max_downtime}")
+        print(f"    Garbage Timeout: {self.garbage_time}")
+        print(f"    Triggered Update Flooding Delay: {self.trigger_timer[0]}-{self.trigger_timer[1]} seconds")
         print("Neighboured router(s): (id, metric)")
         print(f"    {', '.join([f'({i.router_id}, {i.metric})' for i in self.outputs])}")
         
@@ -50,13 +54,24 @@ class Router:
     
     def get_update_time(self):
         """ Get the time in seconds until the router needs to update all neighbours"""
-        return self.last_update - time() + self.current_timeout
+        return max(self.last_update - time() + self.current_timeout, 0)
 
     
-    def reset_timer(self):
+    def reset_periodic_timer(self):
         """ Reset update timer with a uniformly distributed random timeout value"""
-        self.current_timeout = self.timeout_default + round(random.uniform(-self.timeout_delta, self.timeout_delta), 2)
+        self.current_timeout = self.periodic_timeout[0] + round(random.uniform(-self.periodic_timeout[1], self.periodic_timeout[1]), 2)
         self.last_update = time()
+    
+    
+    def get_trigger_time(self):
+        """ Get the time in seconds until the router may send triggered messages"""
+        return max(self.last_trigger - time() + self.trigger_timeout, 0)
+    
+    
+    def reset_triggered_timer(self):
+        """ Reset the timer that prevents flooding of lots of updated packets"""
+        self.trigger_timeout = round(random.uniform(self.trigger_timer[0], self.trigger_timer[1]))
+        self.last_trigger = time()
     
     
     def open(self):
@@ -87,6 +102,7 @@ class Router:
                 timeout = '-' if entry.timeout is None else f"{entry.timeout:.1f}"
                 garbage = '-' if entry.garbage is None else f"{entry.garbage:.1f}"
                 print(f"    {destination_id:<11}  {entry.router_id:<8}  {entry.metric:<6}  {timeout:<12}  {garbage}")
+            print()
                 
                 
     def check_router_down(self):
@@ -134,12 +150,12 @@ class Router:
                         if route.garbage is not None:
                             route.metric = cost
                             route.garbage = None
-                    if route.router_id == (sender_id and route.metric != cost) or (route.router_id != sender_id and route.metric > cost):
+                    if (route.router_id == sender_id and route.metric != cost) or (route.router_id != sender_id and route.metric > cost):
                         # Update forwarding table if needed
                         route.metric = cost
                         route.router_id = sender_id
                         has_updated = True
-                        if cost == INF_METRIC:
+                        if cost == INF_METRIC and route.timeout is not None:
                             route.timeout = None
                             route.garbage = time()
                         else:
@@ -147,6 +163,7 @@ class Router:
             
             if has_updated:
                 #Print new table and schedule a triggered update
+                print(f"Updated forwarding table with a packet from Router {sender_id}")
                 self.print_forwarding_table()
                 self.schedule_update = True
                     
@@ -172,17 +189,27 @@ class Router:
     def run(self):
         """ Server Loop"""
         while True:
-            if self.schedule_update or self.get_update_time() < 0.1:
-                print(f"timeout {self.current_timeout:.2f} {self.get_update_time():.2f}")
+            if self.get_update_time() == 0:
+                # Send periodic update
                 self.check_router_down()
                 self.send_forwarding_table()
+                self.reset_periodic_timer()
+                
+            if self.schedule_update and self.get_trigger_time() == 0:
+                # Send triggered update if timeout is valid
+                self.check_router_down()
+                self.send_forwarding_table()
+                self.reset_triggered_timer()
                 self.schedule_update = False
-                if self.get_update_time() < 0.1: #Only reset response timer if needed
-                    self.reset_timer()
-                    
-            in_packets, _out_packets, _exceptions = select.select(self.sockets, [], [], self.get_update_time())
+            
+            # Get socket timeout such that it ends whenever its time to send a triggered or periodic update.
+            if self.schedule_update:
+                socket_timer = min(self.get_update_time(), self.get_trigger_time())
+            else:
+                socket_timer = self.get_update_time()
+            
+            in_packets, _out_packets, _exceptions = select.select(self.sockets, [], [], socket_timer)
             if in_packets != []:
-                print(f"got packet {self.get_update_time():.2f}")
                 for server in in_packets:
                     for s in self.sockets:
                         if server is s: # read packet from correct port
